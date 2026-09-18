@@ -70,7 +70,7 @@ def _corona_current_ma(voltage_kv: float, onset_kv: float, gap_m: float, electro
     return i_amps * 1000.0  # mA
 
 
-def analyze_needle_plane(tip_radius_mm: float, gap_mm: float, voltage_kv: float, env: Environment):
+def analyze_needle_plane(tip_radius_mm: float, gap_mm: float, voltage_kv: float, env: Environment, gas_strength: float = 1.0):
     r1 = tip_radius_mm / 1000.0
     gap = gap_mm / 1000.0
     center1 = gap + r1
@@ -83,7 +83,7 @@ def analyze_needle_plane(tip_radius_mm: float, gap_mm: float, voltage_kv: float,
     e_max_unit, theta, r_pt, z_pt = cd.surface_max_field(sphere1, all_unit)
     k_field = e_max_unit  # V/m per kV, since solved at V1 = 1000 V = 1 kV
 
-    onset_kv_cm = peek_onset_gradient_kv_cm(tip_radius_mm / 10.0, env)
+    onset_kv_cm = peek_onset_gradient_kv_cm(tip_radius_mm / 10.0, env, gas_strength)
     onset_v_per_m = onset_kv_cm * 1e5
     v_inception = onset_v_per_m / k_field
 
@@ -124,7 +124,7 @@ def analyze_needle_plane(tip_radius_mm: float, gap_mm: float, voltage_kv: float,
     }
 
 
-def analyze_sphere_plane(sphere_radius_mm: float, gap_mm: float, voltage_kv: float, env: Environment):
+def analyze_sphere_plane(sphere_radius_mm: float, gap_mm: float, voltage_kv: float, env: Environment, gas_strength: float = 1.0):
     r1 = sphere_radius_mm / 1000.0
     gap = gap_mm / 1000.0
     center1 = gap + r1
@@ -137,7 +137,7 @@ def analyze_sphere_plane(sphere_radius_mm: float, gap_mm: float, voltage_kv: flo
     e_max_unit, theta, r_pt, z_pt = cd.surface_max_field(sphere1, all_unit)
     k_field = e_max_unit  # V/m per kV, since solved at V1 = 1000 V = 1 kV
 
-    onset_kv_cm = peek_onset_gradient_kv_cm(sphere_radius_mm / 10.0, env)
+    onset_kv_cm = peek_onset_gradient_kv_cm(sphere_radius_mm / 10.0, env, gas_strength)
     onset_v_per_m = onset_kv_cm * 1e5
     v_inception = onset_v_per_m / k_field
 
@@ -178,7 +178,7 @@ def analyze_sphere_plane(sphere_radius_mm: float, gap_mm: float, voltage_kv: flo
     }
 
 
-def analyze_sphere_sphere(electrode_radius_mm: float, gap_mm: float, voltage_kv: float, env: Environment):
+def analyze_sphere_sphere(electrode_radius_mm: float, gap_mm: float, voltage_kv: float, env: Environment, gas_strength: float = 1.0):
     r1 = electrode_radius_mm / 1000.0
     gap = gap_mm / 1000.0
     half_span = gap / 2.0 + r1
@@ -193,7 +193,7 @@ def analyze_sphere_sphere(electrode_radius_mm: float, gap_mm: float, voltage_kv:
     e_max_unit, theta, r_pt, z_pt = cd.surface_max_field(sphere1, all_unit)
     k_field = e_max_unit  # V/m per kV, since solved at V1 = 1000 V = 1 kV
 
-    onset_kv_cm = peek_onset_gradient_kv_cm(electrode_radius_mm / 10.0, env)
+    onset_kv_cm = peek_onset_gradient_kv_cm(electrode_radius_mm / 10.0, env, gas_strength)
     onset_v_per_m = onset_kv_cm * 1e5
     v_inception = onset_v_per_m / k_field
 

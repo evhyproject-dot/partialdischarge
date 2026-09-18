@@ -6,7 +6,14 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from .geometry_registry import ENVIRONMENT_PARAMS, GEOMETRIES, default_environment, default_params
+from .geometry_registry import (
+    ENVIRONMENT_PARAMS,
+    GEOMETRIES,
+    default_environment,
+    default_params,
+    material_library,
+    numeric_param_names,
+)
 from .physics.coaxial_void import analyze_coaxial_void
 from .physics.electrode_geometries import (
     analyze_needle_plane,
@@ -14,6 +21,9 @@ from .physics.electrode_geometries import (
     analyze_sphere_sphere,
 )
 from .physics.environment import Environment
+from .physics.materials import resolve_gas, resolve_solid
+from .physics.parallel_plane_void import analyze_parallel_plane_void
+from .physics.surface_discharge import analyze_surface_discharge
 
 app = FastAPI(title="Partial Discharge / Corona Analyzer")
 
@@ -24,7 +34,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-GeometryName = Literal["needle_plane", "sphere_plane", "sphere_sphere", "coaxial_void"]
+GeometryName = Literal[
+    "needle_plane",
+    "sphere_plane",
+    "sphere_sphere",
+    "parallel_plane_void",
+    "coaxial_void",
+    "surface_discharge",
+]
 
 
 class EnvironmentInput(BaseModel):
@@ -35,13 +52,13 @@ class EnvironmentInput(BaseModel):
 
 class AnalyzeRequest(BaseModel):
     geometry: GeometryName
-    params: dict[str, float]
+    params: dict[str, Any]
     environment: EnvironmentInput = Field(default_factory=EnvironmentInput)
 
 
 class SweepRequest(BaseModel):
     geometry: GeometryName
-    params: dict[str, float]
+    params: dict[str, Any]
     environment: EnvironmentInput = Field(default_factory=EnvironmentInput)
     target: str
     start: float
@@ -57,33 +74,60 @@ def _env_from_input(e: EnvironmentInput) -> Environment:
     )
 
 
-def _validate_params(geometry: str, params: dict[str, float]) -> dict[str, float]:
-    schema = GEOMETRIES[geometry]["params"]
+def _validate_params(geometry: str, params: dict[str, Any]) -> dict[str, Any]:
     merged = default_params(geometry)
     merged.update(params or {})
-    missing = [p["name"] for p in schema if p["name"] not in merged]
-    if missing:
-        raise HTTPException(status_code=422, detail=f"Missing parameters: {missing}")
     return merged
 
 
-def _run_geometry(geometry: str, params: dict[str, float], env: Environment) -> dict[str, Any]:
+def _gas(params: dict[str, Any], name: str):
+    key = params.get(name, "air")
+    return resolve_gas(key, params.get(f"{name}_epsilon_r"), params.get(f"{name}_sigma"), params.get(f"{name}_strength"))
+
+
+def _solid(params: dict[str, Any], name: str):
+    key = params.get(name, "xlpe")
+    return resolve_solid(key, params.get(f"{name}_epsilon_r"), params.get(f"{name}_sigma"))
+
+
+def _run_geometry(geometry: str, params: dict[str, Any], env: Environment) -> dict[str, Any]:
     if geometry == "needle_plane":
-        return analyze_needle_plane(params["tip_radius_mm"], params["gap_mm"], params["voltage_kv"], env)
+        gas = _gas(params, "ambient_gas")
+        return analyze_needle_plane(params["tip_radius_mm"], params["gap_mm"], params["voltage_kv"], env, gas.relative_dielectric_strength)
     if geometry == "sphere_plane":
-        return analyze_sphere_plane(params["sphere_radius_mm"], params["gap_mm"], params["voltage_kv"], env)
+        gas = _gas(params, "ambient_gas")
+        return analyze_sphere_plane(params["sphere_radius_mm"], params["gap_mm"], params["voltage_kv"], env, gas.relative_dielectric_strength)
     if geometry == "sphere_sphere":
-        return analyze_sphere_sphere(params["electrode_radius_mm"], params["gap_mm"], params["voltage_kv"], env)
-    if geometry == "coaxial_void":
-        return analyze_coaxial_void(
-            params["conductor_radius_mm"],
-            params["insulation_thickness_mm"],
-            params["voltage_kv"],
-            params["relative_permittivity"],
-            params["void_position_mm"],
-            params["void_thickness_mm"],
-            params["void_diameter_mm"],
+        gas = _gas(params, "ambient_gas")
+        return analyze_sphere_sphere(params["electrode_radius_mm"], params["gap_mm"], params["voltage_kv"], env, gas.relative_dielectric_strength)
+    if geometry == "parallel_plane_void":
+        insulation = _solid(params, "insulation_material")
+        void_gas = _gas(params, "void_gas")
+        return analyze_parallel_plane_void(
+            params["electrode_diameter_mm"], params["sample_thickness_mm"], params["voltage_kv"],
+            insulation.epsilon_r, insulation.sigma_s_per_m,
+            params["void_position_mm"], params["void_thickness_mm"], params["void_diameter_mm"],
+            void_gas.epsilon_r, void_gas.sigma_s_per_m, void_gas.relative_dielectric_strength,
             env,
+        )
+    if geometry == "coaxial_void":
+        insulation = _solid(params, "insulation_material")
+        void_gas = _gas(params, "void_gas")
+        return analyze_coaxial_void(
+            params["conductor_radius_mm"], params["insulation_thickness_mm"], params["voltage_kv"],
+            insulation.epsilon_r, insulation.sigma_s_per_m,
+            params["void_position_mm"], params["void_thickness_mm"], params["void_diameter_mm"],
+            void_gas.epsilon_r, void_gas.sigma_s_per_m, void_gas.relative_dielectric_strength,
+            env,
+        )
+    if geometry == "surface_discharge":
+        substrate = _solid(params, "substrate_material")
+        gas = _gas(params, "ambient_gas")
+        return analyze_surface_discharge(
+            params["creepage_distance_mm"], params["electrode_edge_radius_mm"], params["voltage_kv"],
+            params["substrate_thickness_mm"], substrate.epsilon_r, substrate.sigma_s_per_m,
+            gas.epsilon_r, gas.sigma_s_per_m, gas.relative_dielectric_strength,
+            params["surface_condition_factor"], env,
         )
     raise HTTPException(status_code=400, detail=f"Unknown geometry {geometry}")
 
@@ -93,6 +137,7 @@ def get_geometries():
     return {
         "geometries": GEOMETRIES,
         "environment_params": ENVIRONMENT_PARAMS,
+        "materials": material_library(),
         "defaults": {
             "environment": default_environment(),
             **{f"params_{name}": default_params(name) for name in GEOMETRIES},
@@ -121,11 +166,11 @@ def sweep(req: SweepRequest):
     base_params = _validate_params(req.geometry, req.params)
     base_env_dict = req.environment.model_dump()
 
-    param_field_names = {p["name"] for p in GEOMETRIES[req.geometry]["params"]}
+    numeric_names = numeric_param_names(req.geometry)
     env_field_names = {p["name"] for p in ENVIRONMENT_PARAMS}
 
-    if req.target not in param_field_names and req.target not in env_field_names:
-        raise HTTPException(status_code=422, detail=f"Unknown sweep target '{req.target}'")
+    if req.target not in numeric_names and req.target not in env_field_names:
+        raise HTTPException(status_code=422, detail=f"Unknown or non-numeric sweep target '{req.target}'")
 
     rows = []
     for i in range(req.steps):
@@ -134,7 +179,7 @@ def sweep(req: SweepRequest):
 
         params = dict(base_params)
         env_dict = dict(base_env_dict)
-        if req.target in param_field_names:
+        if req.target in numeric_names:
             params[req.target] = value
         else:
             env_dict[req.target] = value
@@ -150,6 +195,9 @@ def sweep(req: SweepRequest):
             "status": inception.get("status"),
             "max_field_v_per_m": result.get("max_field_v_per_m"),
         }
+        if "inception_voltage_transient_kv" in inception:
+            row["inception_voltage_transient_kv"] = inception["inception_voltage_transient_kv"]
+            row["inception_voltage_steady_kv"] = inception["inception_voltage_steady_kv"]
         if "corona_current_ma" in result:
             row["corona_current_ma"] = result["corona_current_ma"]
         if "void" in result:

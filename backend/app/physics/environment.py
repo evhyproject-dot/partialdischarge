@@ -68,7 +68,7 @@ class Environment:
         }
 
 
-def peek_onset_gradient_kv_cm(radius_cm: float, env: Environment) -> float:
+def peek_onset_gradient_kv_cm(radius_cm: float, env: Environment, relative_dielectric_strength: float = 1.0) -> float:
     """Peek's empirical DC corona onset gradient at a cylindrical/rod conductor
     surface, in kV/cm:
 
@@ -78,20 +78,28 @@ def peek_onset_gradient_kv_cm(radius_cm: float, env: Environment) -> float:
     and m a surface roughness/irregularity factor (1.0 for a smooth polished
     conductor, lower for stranded/rough surfaces). Humidity is applied as an
     additional multiplicative correction on top of Peek's base formula.
+
+    `relative_dielectric_strength` scales the whole result for a non-air
+    insulating gas (e.g. ~2.5-3x for SF6 relative to air at the same
+    pressure) -- see physics/materials.py.
     """
     delta = env.relative_air_density()
     m = 1.0
     g0 = 30.0 * delta * m * (1.0 + 0.301 / (delta * radius_cm) ** 0.5)
-    return g0 * env.humidity_correction_factor()
+    return g0 * env.humidity_correction_factor() * relative_dielectric_strength
 
 
-def paschen_breakdown_voltage_v(gap_cm: float, env: Environment) -> float:
-    """Paschen's law breakdown voltage (V) for a uniform-field air gap, used
-    for the internal void in the coaxial-cable-with-void geometry:
+def paschen_breakdown_voltage_v(gap_cm: float, env: Environment, relative_dielectric_strength: float = 1.0) -> float:
+    """Paschen's law breakdown voltage (V) for a uniform-field gas gap, used
+    for internal voids and surface-discharge gas paths:
 
         Vb = B * (p*d) / (ln(A * p*d) - ln(ln(1 + 1/gamma)))
 
     p*d in cm*mmHg, A and gamma are standard textbook constants for air.
+    `relative_dielectric_strength` linearly rescales the result for a
+    non-air gas fill (approximate -- Paschen's A/B/gamma constants are
+    actually gas-specific, but this keeps the model to one tunable knob
+    per gas; see physics/materials.py).
     """
     import math
 
@@ -106,5 +114,5 @@ def paschen_breakdown_voltage_v(gap_cm: float, env: Environment) -> float:
     if denom <= 0:
         # Below the Paschen minimum region; fall back to the empirical
         # minimum sparking voltage for air (~327 V) to avoid a singularity.
-        return 327.0
-    return b_const * pd / denom
+        return 327.0 * relative_dielectric_strength
+    return b_const * pd / denom * relative_dielectric_strength

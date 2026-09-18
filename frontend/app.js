@@ -3,6 +3,7 @@ const API_BASE = window.PD_API_BASE || "http://localhost:8000";
 const state = {
   geometries: null,
   envParams: null,
+  materials: { solids: [], gases: [] },
   currentGeometry: null,
   paramValues: {},
   envValues: {},
@@ -30,7 +31,7 @@ function setStatus(ok, msg) {
   s.className = "status " + (ok ? "ok" : "err");
 }
 
-function buildFormField(spec, values, container) {
+function buildNumberField(spec, values, container) {
   const wrap = document.createElement("div");
   wrap.className = "form-field";
   const label = document.createElement("label");
@@ -48,6 +49,52 @@ function buildFormField(spec, values, container) {
   wrap.appendChild(label);
   wrap.appendChild(input);
   container.appendChild(wrap);
+  return wrap;
+}
+
+function buildMaterialField(spec, values, container) {
+  const options = spec.type === "select_gas" ? state.materials.gases : state.materials.solids;
+  const wrap = document.createElement("div");
+  wrap.className = "form-field";
+  const label = document.createElement("label");
+  label.textContent = spec.label;
+  const select = document.createElement("select");
+  for (const opt of options) {
+    const o = document.createElement("option");
+    o.value = opt.key;
+    o.textContent = opt.label;
+    select.appendChild(o);
+  }
+  values[spec.name] = values[spec.name] ?? spec.default;
+  select.value = values[spec.name];
+  wrap.appendChild(label);
+  wrap.appendChild(select);
+  container.appendChild(wrap);
+
+  const customWrap = document.createElement("div");
+  customWrap.className = "custom-material-fields";
+  for (const cf of spec.custom_fields || []) {
+    values[cf.name] = values[cf.name] ?? cf.default;
+    buildNumberField(cf, values, customWrap);
+  }
+  container.appendChild(customWrap);
+
+  const syncVisibility = () => {
+    customWrap.style.display = select.value === "custom" ? "flex" : "none";
+  };
+  select.addEventListener("change", () => {
+    values[spec.name] = select.value;
+    syncVisibility();
+  });
+  syncVisibility();
+}
+
+function buildFormField(spec, values, container) {
+  if (spec.type === "select_gas" || spec.type === "select_solid") {
+    buildMaterialField(spec, values, container);
+  } else {
+    buildNumberField(spec, values, container);
+  }
 }
 
 function renderParamsForm() {
@@ -57,7 +104,6 @@ function renderParamsForm() {
   el("geometryDescription").textContent = schema.description;
   state.paramValues = {};
   for (const p of schema.params) {
-    state.paramValues[p.name] = p.default;
     buildFormField(p, state.paramValues, container);
   }
   populateSweepTargets();
@@ -82,13 +128,22 @@ function updateEnvSummary() {
   el("envSummary").textContent = `Relative air density delta ~= ${delta.toFixed(3)} at T=${t}C, P=${p}kPa, RH=${h}%.`;
 }
 
+function numericParamSpecs(schema) {
+  const out = [];
+  for (const p of schema.params) {
+    if (p.type === "number") out.push(p);
+    for (const cf of p.custom_fields || []) out.push(cf);
+  }
+  return out;
+}
+
 function populateSweepTargets() {
   const sel = el("sweepTarget");
   sel.innerHTML = "";
   const schema = state.geometries[state.currentGeometry];
   const groupParams = document.createElement("optgroup");
-  groupParams.label = "Electrode parameters";
-  for (const p of schema.params) {
+  groupParams.label = "Electrode / material parameters";
+  for (const p of numericParamSpecs(schema)) {
     const o = document.createElement("option");
     o.value = p.name;
     o.textContent = p.label;
@@ -110,7 +165,7 @@ function populateSweepTargets() {
 
 function findParamSpec(name) {
   const schema = state.geometries[state.currentGeometry];
-  return schema.params.find((p) => p.name === name) || state.envParams.find((p) => p.name === name);
+  return numericParamSpecs(schema).find((p) => p.name === name) || state.envParams.find((p) => p.name === name);
 }
 
 function updateSweepDefaults() {
@@ -125,13 +180,21 @@ async function loadGeometries() {
   const data = await api("/api/geometries");
   state.geometries = data.geometries;
   state.envParams = data.environment_params;
+  state.materials = data.materials || { solids: [], gases: [] };
   const sel = el("geometrySelect");
   sel.innerHTML = "";
+  const groups = {};
   for (const [key, g] of Object.entries(state.geometries)) {
+    const cat = g.category || "Other";
+    if (!groups[cat]) {
+      groups[cat] = document.createElement("optgroup");
+      groups[cat].label = cat;
+      sel.appendChild(groups[cat]);
+    }
     const o = document.createElement("option");
     o.value = key;
     o.textContent = g.label;
-    sel.appendChild(o);
+    groups[cat].appendChild(o);
   }
   state.currentGeometry = Object.keys(state.geometries)[0];
   sel.value = state.currentGeometry;
@@ -319,50 +382,93 @@ function renderCoaxialField(result) {
   ctx.clearRect(0, 0, target.width, target.height);
   ctx.drawImage(gridCanvas, 0, 0, target.width, target.height);
 
-  // mark void location
-  const marker = result.geometry.void_marker_xy;
-  const extent = xs[xs.length - 1];
-  const px = ((marker.x + extent) / (2 * extent)) * target.width;
-  const py = target.height - ((marker.y + extent) / (2 * extent)) * target.height;
-  ctx.strokeStyle = "#ffffff";
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.arc(px, py, 6, 0, Math.PI * 2);
-  ctx.stroke();
+  // mark void location, if this result reports one (coaxial-void does; the
+  // parallel-plane test cell shows the void as a bright band instead)
+  const marker = result.geometry && result.geometry.void_marker_xy;
+  if (marker) {
+    const extent = xs[xs.length - 1];
+    const px = ((marker.x + extent) / (2 * extent)) * target.width;
+    const py = target.height - ((marker.y + extent) / (2 * extent)) * target.height;
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(px, py, 6, 0, Math.PI * 2);
+    ctx.stroke();
+  }
 
   drawLegend(Math.pow(10, minL), Math.pow(10, maxL), "Field magnitude (V/m, log scale)");
+}
+
+function badge(status) {
+  return status === "above_onset"
+    ? `<span class="badge above">ABOVE ONSET</span>`
+    : `<span class="badge below">below onset</span>`;
+}
+
+function row(label, val) {
+  return `<div class="row"><span>${label}</span><span>${val}</span></div>`;
 }
 
 function renderInceptionCard(result) {
   const card = el("inceptionCard");
   const inc = result.inception;
-  const statusBadge = inc.status === "above_onset"
-    ? `<span class="badge above">ABOVE ONSET</span>`
-    : `<span class="badge below">below onset</span>`;
+  const hasRegimes = "inception_voltage_transient_kv" in inc;
 
-  let extra = "";
+  let html = "";
+  if (hasRegimes) {
+    html += `<div class="subhead">Transient (t=0+, capacitive)</div>`;
+    html += `<div class="row"><span>Status</span>${badge(inc.status_transient)}</div>`;
+    html += row("PDIV (transient)", `${inc.inception_voltage_transient_kv.toExponential(3)} kV`);
+    html += `<div class="subhead">Steady-state (t&rarr;&infin;, resistive)</div>`;
+    html += `<div class="row"><span>Status</span>${badge(inc.status_steady)}</div>`;
+    html += row("PDIV (steady-state)", `${inc.inception_voltage_steady_kv.toExponential(3)} kV`);
+    if (result.void && "relaxation_time_constant_s" in result.void) {
+      html += row("Relaxation time constant &tau;", formatDuration(result.void.relaxation_time_constant_s));
+    }
+    if (result.surface && "relaxation_time_constant_s" in result.surface) {
+      html += row("Relaxation time constant &tau;", formatDuration(result.surface.relaxation_time_constant_s));
+    }
+    html += `<div class="subhead">Applied</div>`;
+    html += row("Applied voltage", `${inc.applied_voltage_kv.toFixed(3)} kV`);
+    html += row("Margin (applied / steady-state PDIV)", inc.margin_ratio.toFixed(2));
+  } else {
+    html += `<div class="row"><span>Status</span>${badge(inc.status)}</div>`;
+    if (inc.onset_gradient_kv_cm) html += row("Peek onset gradient", `${inc.onset_gradient_kv_cm.toFixed(2)} kV/cm`);
+    html += row("Inception voltage", `${inc.inception_voltage_kv.toFixed(3)} kV`);
+    html += row("Applied voltage", `${inc.applied_voltage_kv.toFixed(3)} kV`);
+    html += row("Margin (applied / inception)", inc.margin_ratio.toFixed(2));
+  }
+
+  html += row("Max field", `${result.max_field_v_per_m.toExponential(2)} V/m`);
+
   if ("corona_current_ma" in result) {
-    extra += row("Indicative corona current", `${result.corona_current_ma.toExponential(2)} mA`);
+    html += row("Indicative corona current", `${result.corona_current_ma.toExponential(2)} mA`);
   }
   if (result.void) {
-    extra += row("Void field", `${result.void.field_v_per_m.toExponential(2)} V/m`);
-    extra += row("Void breakdown voltage", `${result.void.breakdown_voltage_v.toFixed(0)} V`);
-    extra += row("Apparent charge (IEC 60270)", `${result.void.apparent_charge_pc.toFixed(1)} pC`);
+    html += `<div class="subhead">Void</div>`;
+    html += row("Void field (transient)", `${result.void.field_transient_v_per_m.toExponential(2)} V/m`);
+    html += row("Void field (steady-state)", `${result.void.field_steady_v_per_m.toExponential(2)} V/m`);
+    html += row("Void breakdown voltage", `${result.void.breakdown_voltage_v.toFixed(0)} V`);
+    html += row("Apparent charge (IEC 60270)", `${result.void.apparent_charge_pc.toFixed(1)} pC`);
+  }
+  if (result.surface) {
+    html += `<div class="subhead">Surface</div>`;
+    html += row("Interface refraction factor", result.surface.refraction_factor.toFixed(2));
+    html += row("Surface condition factor", result.surface.surface_condition_factor.toFixed(2));
+    html += row("Onset gradient (derated)", `${result.surface.onset_gradient_kv_cm.toFixed(2)} kV/cm`);
+    html += row("Voltage share along surface (transient)", `${(result.surface.voltage_share_transient * 100).toFixed(1)}%`);
+    html += row("Voltage share along surface (steady)", `${(result.surface.voltage_share_steady * 100).toFixed(1)}%`);
   }
 
-  function row(label, val) {
-    return `<div class="row"><span>${label}</span><span>${val}</span></div>`;
-  }
+  card.innerHTML = html;
+}
 
-  card.innerHTML = `
-    <div class="row"><span>Status</span>${statusBadge}</div>
-    ${inc.onset_gradient_kv_cm ? row("Peek onset gradient", `${inc.onset_gradient_kv_cm.toFixed(2)} kV/cm`) : ""}
-    ${row("Inception voltage", `${inc.inception_voltage_kv.toFixed(3)} kV`)}
-    ${row("Applied voltage", `${inc.applied_voltage_kv.toFixed(3)} kV`)}
-    ${row("Margin (applied / inception)", inc.margin_ratio.toFixed(2))}
-    ${row("Max field", `${result.max_field_v_per_m.toExponential(2)} V/m`)}
-    ${extra}
-  `;
+function formatDuration(seconds) {
+  if (seconds < 1) return `${(seconds * 1000).toFixed(1)} ms`;
+  if (seconds < 60) return `${seconds.toFixed(1)} s`;
+  if (seconds < 3600) return `${(seconds / 60).toFixed(1)} min`;
+  if (seconds < 86400) return `${(seconds / 3600).toFixed(1)} h`;
+  return `${(seconds / 86400).toFixed(1)} days`;
 }
 
 async function runAnalyze() {
