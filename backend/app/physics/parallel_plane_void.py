@@ -30,6 +30,7 @@ def analyze_parallel_plane_void(
     void_gas_sigma_s_per_m: float,
     void_gas_dielectric_strength: float,
     env: Environment,
+    include_grid: bool = True,
 ):
     thickness = sample_thickness_mm / 1000.0
     electrode_r = electrode_diameter_mm / 2000.0
@@ -71,24 +72,27 @@ def analyze_parallel_plane_void(
     # the void only shows up as a locally enhanced band where it exists
     # laterally and in depth. This does not resolve the true 3-D fringing
     # field right at the void's edges.
-    nx, ny = 140, 140
-    x_extent = max(electrode_r * 1.05, void_r * 3.0)
-    xs = [-x_extent + 2 * x_extent * i / (nx - 1) for i in range(nx)]
-    ys = [thickness * i / (ny - 1) for i in range(ny)]
+    grid_out = None
+    if include_grid:
+        nx, ny = 140, 140
+        x_extent = max(electrode_r * 1.05, void_r * 3.0)
+        xs = [-x_extent + 2 * x_extent * i / (nx - 1) for i in range(nx)]
+        ys = [thickness * i / (ny - 1) for i in range(ny)]
 
-    field_grid = []
-    for y in ys:
-        row = []
-        for x in xs:
-            if abs(x) > electrode_r:
-                row.append(None)
-                continue
-            in_void_band = void_pos <= y <= void_pos + t_void
-            if in_void_band and abs(x) <= void_r:
-                row.append(e_void_steady)
-            else:
-                row.append(e_solid_steady)
-        field_grid.append(row)
+        field_grid = []
+        for y in ys:
+            row = []
+            for x in xs:
+                if abs(x) > electrode_r:
+                    row.append(None)
+                    continue
+                in_void_band = void_pos <= y <= void_pos + t_void
+                if in_void_band and abs(x) <= void_r:
+                    row.append(e_void_steady)
+                else:
+                    row.append(e_solid_steady)
+            field_grid.append(row)
+        grid_out = {"x": xs, "y": ys, "field_v_per_m": field_grid}
 
     status_transient = "above_onset" if voltage_kv >= v_inception_transient else "below_onset"
     status_steady = "above_onset" if voltage_kv >= v_inception_steady else "below_onset"
@@ -101,7 +105,7 @@ def analyze_parallel_plane_void(
             "void_radius_m": void_r,
             "bulk_average_field_v_per_m": e_bulk,
         },
-        "grid": {"x": xs, "y": ys, "field_v_per_m": field_grid},
+        "grid": grid_out,
         "void": {
             "field_transient_v_per_m": e_void_transient,
             "field_steady_v_per_m": e_void_steady,

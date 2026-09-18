@@ -31,6 +31,7 @@ from __future__ import annotations
 
 from . import conductors as cd
 from .dielectric_layers import two_layer_fields
+from .electrode_geometries import _ion_transit_time_s, _utilization_factor
 from .environment import Environment, peek_onset_gradient_kv_cm
 
 
@@ -50,6 +51,7 @@ def analyze_surface_discharge(
     gas_dielectric_strength: float,
     surface_condition_factor: float,
     env: Environment,
+    include_grid: bool = True,
 ):
     r1 = electrode_edge_radius_mm / 1000.0
     gap = creepage_distance_mm / 1000.0
@@ -84,37 +86,40 @@ def analyze_surface_discharge(
     e_max_raw, *_ = cd.surface_max_field(sphere1, all_charges)
     e_max = e_max_raw * k_refraction
 
-    r_max = max(2.0 * gap, 6.0 * r1, 1e-4)
-    z_max = center1 + r1 + 0.3 * gap
-    nr, nz = 70, 100
-    rs = [r_max * i / (nr - 1) for i in range(nr)]
-    zs = [-0.1 * gap + (z_max - (-0.1 * gap)) * i / (nz - 1) for i in range(nz)]
+    grid_out, field_grid, potential_grid = None, None, None
+    if include_grid:
+        r_max = max(2.0 * gap, 6.0 * r1, 1e-4)
+        z_max = center1 + r1 + 0.3 * gap
+        nr, nz = 70, 100
+        rs = [r_max * i / (nr - 1) for i in range(nr)]
+        zs = [-0.1 * gap + (z_max - (-0.1 * gap)) * i / (nz - 1) for i in range(nz)]
 
-    def inside_sphere(r, z):
-        return (r**2 + (z - center1) ** 2) < r1**2
+        def inside_sphere(r, z):
+            return (r**2 + (z - center1) ** 2) < r1**2
 
-    def inside_substrate(r, z):
-        return z < 0.0
+        def inside_substrate(r, z):
+            return z < 0.0
 
-    field_grid = []
-    potential_grid = []
-    for z in zs:
-        frow, prow = [], []
-        for r in rs:
-            if inside_sphere(r, z) or inside_substrate(r, z):
-                frow.append(None)
-                prow.append(None)
-                continue
-            frow.append(cd.field_magnitude(r, z, all_charges))
-            prow.append(cd.potential_at(r, z, all_charges))
-        field_grid.append(frow)
-        potential_grid.append(prow)
+        field_grid = []
+        potential_grid = []
+        for z in zs:
+            frow, prow = [], []
+            for r in rs:
+                if inside_sphere(r, z) or inside_substrate(r, z):
+                    frow.append(None)
+                    prow.append(None)
+                    continue
+                frow.append(cd.field_magnitude(r, z, all_charges))
+                prow.append(cd.potential_at(r, z, all_charges))
+            field_grid.append(frow)
+            potential_grid.append(prow)
+        grid_out = {"r": rs, "z": zs}
 
     status_transient = "above_onset" if voltage_kv >= v_inception_transient else "below_onset"
     status_steady = "above_onset" if voltage_kv >= v_inception_steady else "below_onset"
 
     return {
-        "grid": {"r": rs, "z": zs},
+        "grid": grid_out,
         "field_magnitude_v_per_m": field_grid,
         "potential_v": potential_grid,
         "max_field_v_per_m": e_max,
@@ -142,4 +147,6 @@ def analyze_surface_discharge(
             "status_transient": status_transient,
             "status_steady": status_steady,
         },
+        "utilization_factor": _utilization_factor(voltage_kv, gap, e_max),
+        "space_charge_time_s": _ion_transit_time_s(all_charges, 1e-9 * gap, gap * (1 - 1e-9)),
     }

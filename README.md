@@ -87,15 +87,24 @@ add `<script>window.PD_API_BASE = "https://your-api-host";</script>` in
   the true cross-section for the two void geometries (void location marked).
 - The inception card reports:
   - For corona geometries: Peek's-law onset gradient, inception voltage,
-    above/below-onset status, max field, and an indicative corona current.
+    above/below-onset status, max field, an indicative corona current, the
+    **field utilization factor** (η = E_avg/E_max — 1.0 for a perfectly
+    uniform field like parallel plates, much less than 1 for a sharp point),
+    and a **DC space-charge (ion transit) time** — the characteristic time
+    for ions to sweep across the gap under the local field, a first-order
+    estimate of how long space-charge effects take to stabilize (see below
+    for its caveats).
   - For internal-void and surface-discharge geometries: **both** a transient
     (t=0+, capacitive) and a steady-state (t→∞, resistive) inception voltage
     and status, plus the interfacial relaxation time constant τ that governs
     how long it takes to transition between the two — see below.
 - The **Parameter Sweep** tab varies any single numeric parameter (electrode/
-  sample dimensions, material properties, or environment) over a range and
-  plots/tables the resulting inception voltage(s), max field, and current/
-  charge, with CSV export.
+  sample dimensions, material properties, or environment) over a range —
+  including pushing voltage well past onset to see the knock-on effects on
+  every other output — and lets you pick **any** resulting metric (inception
+  voltage, max field, utilization factor, space-charge time, current/charge,
+  margin) to plot on the Y-axis, with a full table and CSV export. This is
+  the tool for "if I change just this one thing, what else moves" questions.
 
 ## Physics & assumptions
 
@@ -119,6 +128,23 @@ multiplier for non-air fills (`backend/app/physics/materials.py`).
 Townsend/Kaptzov `I ∝ V(V-V0)` scaling, which is well established
 *qualitatively*; the prefactor here is a simplified adaptation from the
 wire-cylinder formula and should be read as order-of-magnitude only.
+
+**Field utilization factor** `eta = E_avg / E_max` (E_avg = V/gap) is the
+standard HV engineering figure of merit for how non-uniform a gap's field
+is — 1.0 for parallel plates, much less than 1 for a sharp point. Reported
+for all corona geometries plus coaxial-void (bulk field) and surface
+discharge.
+
+**DC space-charge (ion transit) time** integrates `dz / (mobility * E(z))`
+along the gap's symmetry axis using the actual (non-uniform) field profile,
+giving the characteristic time for an ion to sweep from the stressed
+electrode to the counter-electrode. This uses the space-charge-*free*
+(Laplacian) field as an approximation -- it does **not** solve the
+self-consistent, space-charge-augmented field equation, so real space-charge
+stabilization to a steady ionic distribution typically takes a few multiples
+of this single-transit-time estimate, not exactly this value. Treat it as
+"this order of magnitude and faster/slower with these parameters", not a
+calibrated stabilization time.
 
 ### Internal discharge (embedded void) and the transient/steady-state effect
 

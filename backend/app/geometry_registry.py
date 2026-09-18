@@ -61,7 +61,7 @@ GEOMETRIES = {
         "params": [
             {"name": "tip_radius_mm", "label": "Needle tip radius", "unit": "mm", "type": "number", "default": 0.05, "min": 0.005, "max": 5.0},
             {"name": "gap_mm", "label": "Gap distance", "unit": "mm", "type": "number", "default": 20.0, "min": 1.0, "max": 500.0},
-            {"name": "voltage_kv", "label": "Applied DC voltage", "unit": "kV", "type": "number", "default": 15.0, "min": 0.0, "max": 500.0},
+            {"name": "voltage_kv", "label": "Applied DC voltage", "unit": "kV", "type": "number", "default": 15.0, "min": 0.0, "max": 1000.0},
             AMBIENT_GAS_PARAM,
         ],
     },
@@ -72,7 +72,7 @@ GEOMETRIES = {
         "params": [
             {"name": "electrode_radius_mm", "label": "Electrode radius", "unit": "mm", "type": "number", "default": 12.5, "min": 0.5, "max": 200.0},
             {"name": "gap_mm", "label": "Gap distance", "unit": "mm", "type": "number", "default": 30.0, "min": 1.0, "max": 1000.0},
-            {"name": "voltage_kv", "label": "Applied DC voltage", "unit": "kV", "type": "number", "default": 40.0, "min": 0.0, "max": 1000.0},
+            {"name": "voltage_kv", "label": "Applied DC voltage", "unit": "kV", "type": "number", "default": 40.0, "min": 0.0, "max": 2000.0},
             AMBIENT_GAS_PARAM,
         ],
     },
@@ -83,7 +83,7 @@ GEOMETRIES = {
         "params": [
             {"name": "sphere_radius_mm", "label": "Sphere radius", "unit": "mm", "type": "number", "default": 12.5, "min": 0.5, "max": 200.0},
             {"name": "gap_mm", "label": "Gap distance", "unit": "mm", "type": "number", "default": 30.0, "min": 1.0, "max": 1000.0},
-            {"name": "voltage_kv", "label": "Applied DC voltage", "unit": "kV", "type": "number", "default": 40.0, "min": 0.0, "max": 1000.0},
+            {"name": "voltage_kv", "label": "Applied DC voltage", "unit": "kV", "type": "number", "default": 40.0, "min": 0.0, "max": 2000.0},
             AMBIENT_GAS_PARAM,
         ],
     },
@@ -94,7 +94,7 @@ GEOMETRIES = {
         "params": [
             {"name": "electrode_diameter_mm", "label": "Electrode diameter", "unit": "mm", "type": "number", "default": 50.0, "min": 5.0, "max": 300.0},
             {"name": "sample_thickness_mm", "label": "Sample thickness", "unit": "mm", "type": "number", "default": 3.0, "min": 0.2, "max": 50.0},
-            {"name": "voltage_kv", "label": "Applied DC voltage", "unit": "kV", "type": "number", "default": 20.0, "min": 0.0, "max": 500.0},
+            {"name": "voltage_kv", "label": "Applied DC voltage", "unit": "kV", "type": "number", "default": 20.0, "min": 0.0, "max": 2000.0},
             _insulation_material_param(),
             {"name": "void_position_mm", "label": "Void depth (from top electrode)", "unit": "mm", "type": "number", "default": 1.0, "min": 0.05, "max": 49.0},
             {"name": "void_thickness_mm", "label": "Void thickness", "unit": "mm", "type": "number", "default": 0.1, "min": 0.005, "max": 3.0},
@@ -109,7 +109,7 @@ GEOMETRIES = {
         "params": [
             {"name": "conductor_radius_mm", "label": "Inner conductor radius", "unit": "mm", "type": "number", "default": 8.0, "min": 0.5, "max": 100.0},
             {"name": "insulation_thickness_mm", "label": "Insulation thickness", "unit": "mm", "type": "number", "default": 6.0, "min": 0.5, "max": 60.0},
-            {"name": "voltage_kv", "label": "Applied DC voltage", "unit": "kV", "type": "number", "default": 60.0, "min": 0.0, "max": 1000.0},
+            {"name": "voltage_kv", "label": "Applied DC voltage", "unit": "kV", "type": "number", "default": 60.0, "min": 0.0, "max": 2000.0},
             _insulation_material_param(),
             {"name": "void_position_mm", "label": "Void position (from conductor surface)", "unit": "mm", "type": "number", "default": 3.0, "min": 0.05, "max": 59.0},
             {"name": "void_thickness_mm", "label": "Void thickness (radial)", "unit": "mm", "type": "number", "default": 0.2, "min": 0.01, "max": 3.0},
@@ -124,7 +124,7 @@ GEOMETRIES = {
         "params": [
             {"name": "creepage_distance_mm", "label": "Creepage (surface path) distance", "unit": "mm", "type": "number", "default": 30.0, "min": 1.0, "max": 500.0},
             {"name": "electrode_edge_radius_mm", "label": "Electrode edge radius", "unit": "mm", "type": "number", "default": 0.2, "min": 0.01, "max": 10.0},
-            {"name": "voltage_kv", "label": "Applied DC voltage", "unit": "kV", "type": "number", "default": 20.0, "min": 0.0, "max": 500.0},
+            {"name": "voltage_kv", "label": "Applied DC voltage", "unit": "kV", "type": "number", "default": 20.0, "min": 0.0, "max": 1000.0},
             {"name": "substrate_thickness_mm", "label": "Substrate thickness", "unit": "mm", "type": "number", "default": 5.0, "min": 0.5, "max": 100.0},
             _insulation_material_param("substrate_material", "Substrate material", default="epoxy"),
             {"name": "surface_condition_factor", "label": "Surface condition factor (1 = clean/dry)", "unit": "", "type": "number", "default": 0.7, "min": 0.1, "max": 1.0},

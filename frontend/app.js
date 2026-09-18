@@ -440,9 +440,15 @@ function renderInceptionCard(result) {
   }
 
   html += row("Max field", `${result.max_field_v_per_m.toExponential(2)} V/m`);
+  if ("utilization_factor" in result) {
+    html += row("Field utilization factor &eta;", result.utilization_factor.toFixed(3));
+  }
 
   if ("corona_current_ma" in result) {
     html += row("Indicative corona current", `${result.corona_current_ma.toExponential(2)} mA`);
+  }
+  if ("space_charge_time_s" in result) {
+    html += row("Space-charge (ion transit) time", formatDuration(result.space_charge_time_s));
   }
   if (result.void) {
     html += `<div class="subhead">Void</div>`;
@@ -492,16 +498,50 @@ async function runAnalyze() {
 
 // ---------- Sweep ----------
 
-function drawSweepChart(rows, target) {
+const METRIC_LABELS = {
+  target_value: "Swept parameter",
+  inception_voltage_kv: "Inception voltage (kV)",
+  inception_voltage_transient_kv: "Inception voltage, transient (kV)",
+  inception_voltage_steady_kv: "Inception voltage, steady-state (kV)",
+  applied_voltage_kv: "Applied voltage (kV)",
+  margin_ratio: "Margin (applied/inception)",
+  max_field_v_per_m: "Max field (V/m)",
+  corona_current_ma: "Indicative corona current (mA)",
+  apparent_charge_pc: "Apparent charge (pC)",
+  utilization_factor: "Field utilization factor",
+  space_charge_time_s: "Space-charge (ion transit) time (s)",
+};
+
+function metricLabel(key) {
+  return METRIC_LABELS[key] || key;
+}
+
+function populateSweepMetricOptions(rows) {
+  const sel = el("sweepMetric");
+  const prev = sel.value;
+  sel.innerHTML = "";
+  const numericKeys = Object.keys(rows[0]).filter((k) => k !== "target_value" && k !== "status" && typeof rows[0][k] === "number");
+  for (const k of numericKeys) {
+    const o = document.createElement("option");
+    o.value = k;
+    o.textContent = metricLabel(k);
+    sel.appendChild(o);
+  }
+  if (numericKeys.includes(prev)) sel.value = prev;
+  else if (numericKeys.includes("max_field_v_per_m")) sel.value = "max_field_v_per_m";
+}
+
+function drawSweepChart(rows, target, metric) {
   const canvas = el("sweepCanvas");
   const ctx = canvas.getContext("2d");
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  const pad = { l: 60, r: 20, t: 20, b: 40 };
+  const pad = { l: 70, r: 20, t: 20, b: 40 };
   const w = canvas.width - pad.l - pad.r;
   const h = canvas.height - pad.t - pad.b;
 
   const xs = rows.map((r) => r.target_value);
-  const ys = rows.map((r) => r.max_field_v_per_m);
+  const ys = rows.map((r) => r[metric]).filter((v) => typeof v === "number" && isFinite(v));
+  if (!ys.length) return;
   const xMin = Math.min(...xs), xMax = Math.max(...xs);
   const yMin = Math.min(...ys), yMax = Math.max(...ys);
 
@@ -514,11 +554,11 @@ function drawSweepChart(rows, target) {
 
   ctx.fillStyle = "#93a0b3";
   ctx.font = "11px sans-serif";
-  ctx.fillText(target, pad.l + w / 2 - 20, canvas.height - 8);
+  ctx.fillText(metricLabel(target), pad.l + w / 2 - 30, canvas.height - 8);
   ctx.save();
-  ctx.translate(14, pad.t + h / 2 + 30);
+  ctx.translate(16, pad.t + h / 2 + 40);
   ctx.rotate(-Math.PI / 2);
-  ctx.fillText("Max field (V/m)", 0, 0);
+  ctx.fillText(metricLabel(metric), 0, 0);
   ctx.restore();
 
   const xTo = (v) => pad.l + ((v - xMin) / (xMax - xMin || 1)) * w;
@@ -527,16 +567,21 @@ function drawSweepChart(rows, target) {
   ctx.strokeStyle = "#4f8fef";
   ctx.lineWidth = 2;
   ctx.beginPath();
-  rows.forEach((r, i) => {
+  let started = false;
+  rows.forEach((r) => {
+    const v = r[metric];
+    if (typeof v !== "number" || !isFinite(v)) return;
     const x = xTo(r.target_value);
-    const y = yTo(r.max_field_v_per_m);
-    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    const y = yTo(v);
+    if (!started) { ctx.moveTo(x, y); started = true; } else ctx.lineTo(x, y);
   });
   ctx.stroke();
 
   rows.forEach((r) => {
+    const v = r[metric];
+    if (typeof v !== "number" || !isFinite(v)) return;
     const x = xTo(r.target_value);
-    const y = yTo(r.max_field_v_per_m);
+    const y = yTo(v);
     ctx.fillStyle = r.status === "above_onset" ? "#d7263d" : "#1c8a4b";
     ctx.beginPath();
     ctx.arc(x, y, 3, 0, Math.PI * 2);
@@ -572,7 +617,8 @@ async function runSweep() {
     };
     const result = await api("/api/sweep", { method: "POST", body: JSON.stringify(body) });
     state.lastSweep = result;
-    drawSweepChart(result.rows, target);
+    populateSweepMetricOptions(result.rows);
+    drawSweepChart(result.rows, target, el("sweepMetric").value);
     renderSweepTable(result.rows);
   } catch (e) {
     alert("Sweep failed: " + e.message);
@@ -611,6 +657,11 @@ async function init() {
   el("analyzeBtn").addEventListener("click", runAnalyze);
   el("sweepBtn").addEventListener("click", runSweep);
   el("exportCsvBtn").addEventListener("click", exportCsv);
+  el("sweepMetric").addEventListener("change", () => {
+    if (state.lastSweep) {
+      drawSweepChart(state.lastSweep.rows, state.lastSweep.target, el("sweepMetric").value);
+    }
+  });
   try {
     await loadGeometries();
     setStatus(true, "connected");

@@ -42,6 +42,7 @@ def analyze_coaxial_void(
     void_gas_sigma_s_per_m: float,
     void_gas_dielectric_strength: float,
     env: Environment,
+    include_grid: bool = True,
 ):
     r1 = conductor_radius_mm / 1000.0
     thickness = insulation_thickness_mm / 1000.0
@@ -82,24 +83,28 @@ def analyze_coaxial_void(
 
     apparent_charge_pc = ca * v_breakdown_void * 1e12
 
-    n_r = 120
-    radii = [r1 + (r2 - r1) * i / (n_r - 1) for i in range(n_r)]
-    field_profile = [e_dielectric(r) for r in radii]
+    radial_profile_out, grid_out = None, None
+    if include_grid:
+        n_r = 120
+        radii = [r1 + (r2 - r1) * i / (n_r - 1) for i in range(n_r)]
+        field_profile = [e_dielectric(r) for r in radii]
+        radial_profile_out = {"r_m": radii, "field_v_per_m": field_profile}
 
-    n_grid = 140
-    extent = r2 * 1.15
-    xs = [-extent + 2 * extent * i / (n_grid - 1) for i in range(n_grid)]
-    ys = list(xs)
-    field_grid = []
-    for y in ys:
-        row = []
-        for x in xs:
-            r = math.hypot(x, y)
-            if r < r1 or r > r2:
-                row.append(None)
-            else:
-                row.append(e_dielectric(r))
-        field_grid.append(row)
+        n_grid = 140
+        extent = r2 * 1.15
+        xs = [-extent + 2 * extent * i / (n_grid - 1) for i in range(n_grid)]
+        ys = list(xs)
+        field_grid = []
+        for y in ys:
+            row = []
+            for x in xs:
+                r = math.hypot(x, y)
+                if r < r1 or r > r2:
+                    row.append(None)
+                else:
+                    row.append(e_dielectric(r))
+            field_grid.append(row)
+        grid_out = {"x": xs, "y": ys, "field_v_per_m": field_grid}
 
     void_angle = 0.0
     void_x = r_void * math.cos(void_angle)
@@ -115,8 +120,8 @@ def analyze_coaxial_void(
             "void_radius_m": r_void,
             "void_marker_xy": {"x": void_x, "y": void_y},
         },
-        "radial_profile": {"r_m": radii, "field_v_per_m": field_profile},
-        "grid": {"x": xs, "y": ys, "field_v_per_m": field_grid},
+        "radial_profile": radial_profile_out,
+        "grid": grid_out,
         "void": {
             "field_transient_v_per_m": e_void_transient,
             "field_steady_v_per_m": e_void_steady,
@@ -139,4 +144,5 @@ def analyze_coaxial_void(
             "status_steady": status_steady,
         },
         "max_field_v_per_m": e_dielectric(r1),
+        "utilization_factor": (v / thickness) / e_dielectric(r1),
     }

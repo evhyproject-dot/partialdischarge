@@ -90,16 +90,16 @@ def _solid(params: dict[str, Any], name: str):
     return resolve_solid(key, params.get(f"{name}_epsilon_r"), params.get(f"{name}_sigma"))
 
 
-def _run_geometry(geometry: str, params: dict[str, Any], env: Environment) -> dict[str, Any]:
+def _run_geometry(geometry: str, params: dict[str, Any], env: Environment, include_grid: bool = True) -> dict[str, Any]:
     if geometry == "needle_plane":
         gas = _gas(params, "ambient_gas")
-        return analyze_needle_plane(params["tip_radius_mm"], params["gap_mm"], params["voltage_kv"], env, gas.relative_dielectric_strength)
+        return analyze_needle_plane(params["tip_radius_mm"], params["gap_mm"], params["voltage_kv"], env, gas.relative_dielectric_strength, include_grid)
     if geometry == "sphere_plane":
         gas = _gas(params, "ambient_gas")
-        return analyze_sphere_plane(params["sphere_radius_mm"], params["gap_mm"], params["voltage_kv"], env, gas.relative_dielectric_strength)
+        return analyze_sphere_plane(params["sphere_radius_mm"], params["gap_mm"], params["voltage_kv"], env, gas.relative_dielectric_strength, include_grid)
     if geometry == "sphere_sphere":
         gas = _gas(params, "ambient_gas")
-        return analyze_sphere_sphere(params["electrode_radius_mm"], params["gap_mm"], params["voltage_kv"], env, gas.relative_dielectric_strength)
+        return analyze_sphere_sphere(params["electrode_radius_mm"], params["gap_mm"], params["voltage_kv"], env, gas.relative_dielectric_strength, include_grid)
     if geometry == "parallel_plane_void":
         insulation = _solid(params, "insulation_material")
         void_gas = _gas(params, "void_gas")
@@ -108,7 +108,7 @@ def _run_geometry(geometry: str, params: dict[str, Any], env: Environment) -> di
             insulation.epsilon_r, insulation.sigma_s_per_m,
             params["void_position_mm"], params["void_thickness_mm"], params["void_diameter_mm"],
             void_gas.epsilon_r, void_gas.sigma_s_per_m, void_gas.relative_dielectric_strength,
-            env,
+            env, include_grid,
         )
     if geometry == "coaxial_void":
         insulation = _solid(params, "insulation_material")
@@ -118,7 +118,7 @@ def _run_geometry(geometry: str, params: dict[str, Any], env: Environment) -> di
             insulation.epsilon_r, insulation.sigma_s_per_m,
             params["void_position_mm"], params["void_thickness_mm"], params["void_diameter_mm"],
             void_gas.epsilon_r, void_gas.sigma_s_per_m, void_gas.relative_dielectric_strength,
-            env,
+            env, include_grid,
         )
     if geometry == "surface_discharge":
         substrate = _solid(params, "substrate_material")
@@ -127,7 +127,7 @@ def _run_geometry(geometry: str, params: dict[str, Any], env: Environment) -> di
             params["creepage_distance_mm"], params["electrode_edge_radius_mm"], params["voltage_kv"],
             params["substrate_thickness_mm"], substrate.epsilon_r, substrate.sigma_s_per_m,
             gas.epsilon_r, gas.sigma_s_per_m, gas.relative_dielectric_strength,
-            params["surface_condition_factor"], env,
+            params["surface_condition_factor"], env, include_grid,
         )
     raise HTTPException(status_code=400, detail=f"Unknown geometry {geometry}")
 
@@ -185,7 +185,7 @@ def sweep(req: SweepRequest):
             env_dict[req.target] = value
 
         env = Environment(**env_dict)
-        result = _run_geometry(req.geometry, params, env)
+        result = _run_geometry(req.geometry, params, env, include_grid=False)
         inception = result.get("inception", {})
         row = {
             "target_value": value,
@@ -202,6 +202,10 @@ def sweep(req: SweepRequest):
             row["corona_current_ma"] = result["corona_current_ma"]
         if "void" in result:
             row["apparent_charge_pc"] = result["void"]["apparent_charge_pc"]
+        if "utilization_factor" in result:
+            row["utilization_factor"] = result["utilization_factor"]
+        if "space_charge_time_s" in result:
+            row["space_charge_time_s"] = result["space_charge_time_s"]
         rows.append(row)
 
     return {"target": req.target, "rows": rows}
