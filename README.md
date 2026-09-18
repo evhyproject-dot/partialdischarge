@@ -73,15 +73,18 @@ file server.
 Since it's one FastAPI process, any host that can run a Python web service
 works. Two easy free/cheap options:
 
-**Render.com** (probably the fastest path to a shareable URL):
-1. Push this branch/PR to your `main` (or point Render at this branch).
-2. In Render, "New +" → "Web Service" → connect the `partialdischarge` repo.
-3. Settings:
-   - **Root Directory:** `backend`
-   - **Build Command:** `pip install -r requirements.txt`
-   - **Start Command:** `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
-4. Deploy. Render gives you a `https://<name>.onrender.com` URL — that's the
+**Render.com** (probably the fastest path to a shareable URL). This repo
+includes a `render.yaml` blueprint, so:
+1. Push this branch (or merge it to `main`).
+2. In Render: "New +" → "Blueprint" → connect the `partialdischarge` repo →
+   pick the branch. Render reads `render.yaml` and fills in the settings
+   itself (root dir `backend`, build/start commands, free plan).
+3. Deploy. Render gives you a `https://<name>.onrender.com` URL — that's the
    whole app, frontend included.
+
+(No blueprint handy? The manual settings are the same: root directory
+`backend`, build command `pip install -r requirements.txt`, start command
+`uvicorn app.main:app --host 0.0.0.0 --port $PORT`.)
 
 **Railway.app** works almost identically (connect the repo, set the same
 root directory/build/start commands, it detects Python automatically).
