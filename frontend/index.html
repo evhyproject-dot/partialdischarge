@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DC Corona / Partial Discharge Analyzer</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">&#9889;</span>
+      <div>
+        <h1>DC Corona / Partial Discharge Analyzer</h1>
+        <p class="subtitle">Analytical field &amp; inception-voltage explorer for DC corona and internal-void PD</p>
+      </div>
+    </div>
+    <div class="status" id="connectionStatus">connecting&hellip;</div>
+  </header>
+
+  <div class="layout">
+    <aside class="panel controls">
+      <section>
+        <h2>Geometry</h2>
+        <select id="geometrySelect"></select>
+        <p class="hint" id="geometryDescription"></p>
+      </section>
+
+      <section id="paramsSection">
+        <h2>Electrode parameters</h2>
+        <div id="paramsForm" class="form-grid"></div>
+      </section>
+
+      <section>
+        <h2>Environment</h2>
+        <div id="envForm" class="form-grid"></div>
+        <p class="hint" id="envSummary"></p>
+      </section>
+
+      <button id="analyzeBtn" class="primary-btn">Analyze</button>
+
+      <section class="inception-card" id="inceptionCard"></section>
+    </aside>
+
+    <main class="panel main-view">
+      <div class="tabs">
+        <button class="tab-btn active" data-tab="field">Field Map</button>
+        <button class="tab-btn" data-tab="sweep">Parameter Sweep</button>
+      </div>
+
+      <div class="tab-content" id="tab-field">
+        <div class="field-view">
+          <canvas id="fieldCanvas" width="640" height="640"></canvas>
+          <div class="legend" id="fieldLegend"></div>
+        </div>
+        <p class="hint">Color = electric field magnitude. Contour lines = equipotentials. Axis of symmetry is the left edge (r=0) for point-gap geometries, or the cable's true cross-section for the coaxial-void geometry.</p>
+      </div>
+
+      <div class="tab-content hidden" id="tab-sweep">
+        <div class="sweep-controls">
+          <label>Sweep parameter
+            <select id="sweepTarget"></select>
+          </label>
+          <label>Start <input id="sweepStart" type="number" step="any"></label>
+          <label>Stop <input id="sweepStop" type="number" step="any"></label>
+          <label>Steps <input id="sweepSteps" type="number" value="20" min="2" max="200"></label>
+          <button id="sweepBtn" class="primary-btn">Run sweep</button>
+          <button id="exportCsvBtn" class="secondary-btn">Export CSV</button>
+        </div>
+        <div class="sweep-controls">
+          <label>Plot on Y-axis
+            <select id="sweepMetric"></select>
+          </label>
+        </div>
+        <canvas id="sweepCanvas" width="640" height="420"></canvas>
+        <div id="sweepTableWrap"></div>
+      </div>
+    </main>
+  </div>
+
+  <footer class="footnote">
+    Analytical models (image-charge field solver for point/sphere gaps; Peek's law with air-density &amp; humidity correction; Paschen's law; the ABC void model; a two-layer Maxwell-Wagner solver for transient-vs-steady-state DC field redistribution). Material presets (permittivity/conductivity) are indicative room-temperature reference values &mdash; real dielectric DC conductivity is strongly field- and temperature-dependent, especially for HVDC-grade polymers. Order-of-magnitude tool for exploration, not a certified test instrument &mdash; see README for assumptions and references.
+  </footer>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
