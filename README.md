@@ -38,9 +38,10 @@ cavity inside it:
 separated by a creepage path across a solid insulator's surface, exposed to
 an ambient gas.
 
-## Running it
+## Running it locally
 
-### Backend (FastAPI)
+It's a single service: FastAPI serves both the `/api/*` endpoints and the
+frontend's static files (HTML/CSS/JS) from the same process and port.
 
 ```bash
 cd backend
@@ -49,31 +50,50 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload --port 8000
 ```
 
-The API comes up at `http://localhost:8000` (docs at `/docs`).
+Open **http://localhost:8000** — that's the app. (API docs are at `/docs`.)
 
 > This sandbox's outbound connection to PyPI was down for the whole build
 > session (503s from the egress gateway on both `pypi.org` and
 > `registry.npmjs.org`), so `pip install` could not be exercised here. The
-> physics and the full analyze/sweep request logic were verified directly in
-> Python (bypassing FastAPI) and the frontend was verified against a
-> stdlib-only stand-in server with Playwright screenshots, so the logic is
-> confirmed correct — but do run `pip install -r requirements.txt` and a
-> real `uvicorn` boot on your machine before relying on it, in case something
-> FastAPI/Pydantic-version-specific surfaces there.
+> physics, the full analyze/sweep request logic, and the combined
+> frontend+API serving were all verified directly (bypassing FastAPI/pip)
+> with a stdlib-only stand-in server and Playwright screenshots, so the
+> logic is confirmed correct — but do run `pip install -r requirements.txt`
+> and a real `uvicorn` boot on your machine before relying on it, in case
+> something FastAPI/Pydantic-version-specific surfaces there.
 
-### Frontend
+If you ever want to host the frontend separately from the API (e.g. a CDN
+for the static files, a different host for the backend), the frontend still
+works standalone — just set `window.PD_API_BASE = "https://your-api-host"`
+before `app.js` loads in `index.html`, and serve `frontend/` with any static
+file server.
 
-Static files, no build step:
+## Deploying it somewhere you can share a link
 
-```bash
-cd frontend
-python3 -m http.server 8080
-```
+Since it's one FastAPI process, any host that can run a Python web service
+works. Two easy free/cheap options:
 
-Open `http://localhost:8080`. If your backend isn't on
-`http://localhost:8000`, set `window.PD_API_BASE` before `app.js` loads (e.g.
-add `<script>window.PD_API_BASE = "https://your-api-host";</script>` in
-`index.html`).
+**Render.com** (probably the fastest path to a shareable URL):
+1. Push this branch/PR to your `main` (or point Render at this branch).
+2. In Render, "New +" → "Web Service" → connect the `partialdischarge` repo.
+3. Settings:
+   - **Root Directory:** `backend`
+   - **Build Command:** `pip install -r requirements.txt`
+   - **Start Command:** `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+4. Deploy. Render gives you a `https://<name>.onrender.com` URL — that's the
+   whole app, frontend included.
+
+**Railway.app** works almost identically (connect the repo, set the same
+root directory/build/start commands, it detects Python automatically).
+
+**Fly.io** if you want a Dockerfile-based deploy instead — ask and I can add
+a `Dockerfile` (it's just `pip install -r backend/requirements.txt` then
+`uvicorn app.main:app --host 0.0.0.0 --port 8080`, run from `backend/`).
+
+Any of these need you to actually own/connect the GitHub repo and the
+hosting account — that's not something I can do from here, but I can add
+config files (e.g. a `render.yaml` or `Dockerfile`) if you tell me which
+host you want to use.
 
 ## What you can do
 

@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any, Literal
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from .geometry_registry import (
@@ -214,3 +216,11 @@ def sweep(req: SweepRequest):
 @app.get("/api/health")
 def health():
     return {"status": "ok"}
+
+
+# Serve the frontend (static HTML/CSS/JS) from the same process, so the whole
+# app is a single deployable service on a single port. Mounted last so it
+# doesn't shadow the /api/* routes above.
+_FRONTEND_DIR = Path(__file__).resolve().parent.parent.parent / "frontend"
+if _FRONTEND_DIR.is_dir():
+    app.mount("/", StaticFiles(directory=str(_FRONTEND_DIR), html=True), name="frontend")

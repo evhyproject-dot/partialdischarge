@@ -1,4 +1,7 @@
-const API_BASE = window.PD_API_BASE || "http://localhost:8000";
+// Defaults to same-origin ("") since the FastAPI backend serves this
+// frontend directly (see backend/app/main.py's StaticFiles mount). Only set
+// window.PD_API_BASE if the frontend is hosted separately from the API.
+const API_BASE = window.PD_API_BASE || "";
 
 const state = {
   geometries: null,
